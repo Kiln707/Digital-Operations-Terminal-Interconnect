@@ -1,1 +1,1 @@
-# Digital-Operations-Terminal-Interconnect
+# Digital-Operations-Terminal-Interconnect (DOTI)
