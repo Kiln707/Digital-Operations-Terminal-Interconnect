@@ -1,4 +1,7 @@
-import winreg
+try:
+    import _winreg as _winreg
+except ImportError:
+    import winreg
 
 ###############################################
 #   Windows Registry Handler
@@ -40,6 +43,12 @@ class RegistryProperty():
         else:
             raise ValueError()
 
+    def getType(self):
+        return self.__class__.__dict__[self.type]
+
+    def __str__(self):
+        return self.value
+
     @classmethod
     def _validType(cls, propertyType):
         if propertyType.startswith('_'):
@@ -70,31 +79,85 @@ class RegistryKey():
     HKCC=winreg.HKEY_CURRENT_CONFIG
 
     def __init__(self, root, path):
-        if not self.__class__.validRoot(root):
+        if not self.validRoot(root):
             raise ValueError()
-        self._root=root
+        if type(root) is str:
+            self._root=self.__class__.__dict__[root]
+        else:
+            self._root=root
         self._path=path
-        self._properties={}
+        self._subkeys=[]
+        self._properties=[]
         self._importKey()
 
     def _importKey(self):
         if self.exists():
-            with winreg.OpenKey(self._root, self._path) as k:
+            with self._openkey() as k:
                 keyinfo=winreg.QueryInfoKey(k)
-                for i in range(0, keyinfo[1]):
-                    value = winreg.EnumValue(k, i)
-                    self._properties[value[0]] = (value[1], value[2])
+                for value in self._getKeyProperties(k):
+                    self._properties.append(value[0])
+                    setattr(self, value[0], RegistryProperty(value[0], value[1], value[2]))
+                for i in range(0, keyinfo[0]):
+                    value = winreg.EnumKey(k, i)
+                    self._subkeys.append(value)
 
-    def __getattr__(self, value):
-        if value not in self._properties:
-            raise AttributeError()
-        return self._properties[value]
+    def save(self):
+        if self.exists():
+            with self._openkey(access=winreg.KEY_ALL_ACCESS) as k:
+                self._saveData(k)
+        else:
+            with winreg.CreateKeyEx(self._root, self._path, 0, access=winreg.KEY_SET_VALUE) as k:
+                self._saveData(k)
 
-    def __setattr__(self, name, value):
-        pass
+    def _saveData(self, handle):
+        current_data=[]
+        with self._openkey() as k:
+            current_data =self._getKeyProperties(k)
+        for val in current_data:
+            if val[0] not in self._properties:
+                winreg.DeleteValue(handle, val[0])
+        for prop in self._properties:
+            data = getattr(self, prop)
+            winreg.SetValueEx(handle, data.name, 0, data.getType(), data.value)
+
+    def _openkey(self, access=winreg.KEY_READ):
+        return winreg.OpenKey(self._root, self._path, access=access)
+
+    def newProperty(self, prop):
+        if not isinstance(prop, RegistryProperty):
+            raise ValueError()
+        setattr(self, prop.name, prop)
+        self._properties.append(prop.name)
+
+    def deleteProperty(self, prop):
+        if getattr(self, prop):
+            delattr(self, prop)
+        self._properties.remove(prop)
+
+    def hasProperty(self, prop):
+        return hasattr(self, prop)
 
     def getProperties(self):
-        return self._properties.keys()
+        return list(self._properties)
+
+    def _getKeyProperties(self, handle):
+        props=[]
+        keyinfo=winreg.QueryInfoKey(handle)
+        for i in range(0, keyinfo[1]):
+            value = winreg.EnumValue(handle, i)
+            props.append(value)
+        return props
+
+    def getSubKeys(self):
+        return list(self._subkeys)
+
+    def getSubKey(self, name):
+        if name not in self._subkeys:
+            raise AttributeError()
+        return RegistryKey(self._root, self._path+"\\%s"%name)
+
+    def delete(self):
+        winreg.DeleteKey(self._root, self._path)
 
     def exists(self):
         try:
@@ -106,9 +169,4 @@ class RegistryKey():
 
     @classmethod
     def validRoot(cls, key):
-        return key in cls.__dict__
-
-
-if __name__ == '__main__':
-    r = RegistryKey('HKEY_LOCAL_MACHINE', r'SOFTWARE\7-Zip')
-    print(RegistryProperty.__dict__)
+        return key in cls.__dict__ or key in cls.__dict__.values()
