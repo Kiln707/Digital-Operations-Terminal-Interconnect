@@ -1,5 +1,6 @@
+import argparse
+
 import win32net, json
-from win_ad import getDomainUser, domainUserExists
 
 def userExists(username, domain=None):
     try:
@@ -21,9 +22,6 @@ def localGroupExists(groupname):
     except:
         return False
 
-def getUserSID(username, domain=None):
-    return win32net.NetUserGetInfo('solano.cc.ca.us', 'sswanson', 4)['user_sid']
-
 def addUserToLocalGroup(group, username, domain=None):
     if localGroupExists(group):
         if domain and userExists(username, domain):
@@ -38,9 +36,14 @@ def removeUserFromLocalGroup(group, username, domain=None):
         elif userExists(username):
             win32net.NetLocalGroupDelMembers(None, group, [r"%s"%username])
 
-if __name__ == '__main__':
-    #addUserToLocalGroup('Administrators', 'testing')
-    removeUserFromLocalGroup('Administrators', 'gtom', 'NTNET')
 
-    print(win32net.NetLocalGroupGetMembers(None, 'Administrators', 2))
-    #win32net.NetLocalGroupDelMembers(None, 'Administrators', [json.dumps({'domainandname':'NTNET\\gtom'})])
+
+parser = argparse.ArgumentParser(description="Add users to Administrators Local Group.")
+parser.add_argument('domain', action='store')
+parser.add_argument('users', nargs=argparse.REMAINDER)
+
+args = parser.parse_args()
+args.domain
+for user in args.users:
+    print("Adding %s\\%s to Administrators"%(args.domain, user))
+    addUserToLocalGroup('Administrators', user, args.domain)
