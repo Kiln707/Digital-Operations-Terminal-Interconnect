@@ -39,11 +39,9 @@ def removeUserFromLocalGroup(group, username, domain=None):
 
 
 parser = argparse.ArgumentParser(description="Add users to Administrators Local Group.")
-parser.add_argument('domain', action='store')
+parser.add_argument('--domain', action='store')
 parser.add_argument('users', nargs=argparse.REMAINDER)
 
 args = parser.parse_args()
-args.domain
 for user in args.users:
-    print("Adding %s\\%s to Administrators"%(args.domain, user))
     addUserToLocalGroup('Administrators', user, args.domain)
