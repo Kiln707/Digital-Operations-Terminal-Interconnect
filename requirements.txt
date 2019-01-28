@@ -1,2 +1,2 @@
-win32net
+pypiwin32
 pyad
